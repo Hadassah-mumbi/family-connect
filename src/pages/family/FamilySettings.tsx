@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Home, 
@@ -18,11 +18,18 @@ import {
   ChevronRight,
   Save
 } from 'lucide-react';
+import { auth, db } from '../../firebase/config';
+import { doc, getDoc } from 'firebase/firestore';
 
 const FamilySettings: React.FC = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('profile');
   const [darkMode, setDarkMode] = useState(false);
+  
+  // User profile states
+  const [userName, setUserName] = useState('Family Member');
+  const [userInitial, setUserInitial] = useState('U');
+  
   const [notifications, setNotifications] = useState({
     emailResponses: true,
     pushResponses: false,
@@ -33,9 +40,9 @@ const FamilySettings: React.FC = () => {
 
   // Profile form state
   const [profile, setProfile] = useState({
-    name: 'Sarah Williams',
-    email: 'sarah.williams@family.com',
-    phone: '+254 712 345 678',
+    name: '',
+    email: '',
+    phone: '',
     role: 'Family Organizer'
   });
 
@@ -45,6 +52,32 @@ const FamilySettings: React.FC = () => {
     new: '',
     confirm: ''
   });
+
+  // Load user profile from Firestore
+  useEffect(() => {
+    const loadUser = async () => {
+      const user = auth.currentUser;
+      if (user) {
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          const name = data.name || 'Family Member';
+          setUserName(name);
+          setUserInitial(name.charAt(0).toUpperCase());
+          
+          // Update profile form with real data
+          setProfile({
+            name: data.name || '',
+            email: data.email || user.email || '',
+            phone: data.phone || '',
+            role: data.role || 'Family Organizer'
+          });
+        }
+      }
+    };
+    loadUser();
+  }, []);
 
   const handleSaveProfile = () => {
     console.log('Profile saved:', profile);
@@ -65,8 +98,8 @@ const FamilySettings: React.FC = () => {
     setPasswordData({ current: '', new: '', confirm: '' });
   };
 
-  const handleLogout = () => {
-    // In a real app, you'd clear auth tokens here
+  const handleLogout = async () => {
+    await auth.signOut();
     navigate('/');
   };
 
@@ -99,15 +132,6 @@ const FamilySettings: React.FC = () => {
               <span>Question Bank</span>
             </button>
 
-            {/* Schedule */}
-            <button 
-              onClick={() => navigate('/family/schedule')}
-              className="w-full flex items-center space-x-3 px-4 py-3 text-secondary hover:bg-gray-50 rounded-lg transition-colors"
-            >
-              <Calendar className="w-5 h-5" />
-              <span>Schedule</span>
-            </button>
-
             {/* Responses */}
             <button 
               onClick={() => navigate('/family/responses')}
@@ -137,14 +161,14 @@ const FamilySettings: React.FC = () => {
           </div>
         </nav>
 
-        {/* User Profile */}
+        {/* User Profile - DYNAMIC */}
         <div className="p-4 border-t border-gray-100">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
-              <span className="text-primary font-semibold">S</span>
+              <span className="text-primary font-semibold">{userInitial}</span>
             </div>
             <div className="flex-1">
-              <p className="text-sm font-medium text-primary">Sarah Williams</p>
+              <p className="text-sm font-medium text-primary">{userName}</p>
               <p className="text-xs text-secondary">Family Organizer</p>
             </div>
           </div>
