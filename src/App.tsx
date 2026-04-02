@@ -12,6 +12,8 @@ import DailyQuestion from './pages/elderly/DailyQuestion';
 import SavedForLater from './pages/elderly/SavedForLater';
 import History from './pages/elderly/History';
 import ElderlySettings from './pages/elderly/ElderlySettings';
+import './firebase/test';
+import SignUp from './pages/family/SignUp';
 function App() {
   return (
     <BrowserRouter>
@@ -29,6 +31,7 @@ function App() {
         <Route path="/elderly/saved" element={<SavedForLater />} />
         <Route path="/elderly/history" element={<History />} />
         <Route path="/elderly/settings" element={<ElderlySettings />} />
+        <Route path="/family/signup" element={<SignUp />} />  
       </Routes>
     </BrowserRouter>
   );

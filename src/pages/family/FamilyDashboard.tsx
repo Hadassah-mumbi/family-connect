@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Home, 
@@ -11,63 +11,172 @@ import {
   Send,
   Clock,
   CheckCircle,
-  AlertCircle
 } from 'lucide-react';
+import { auth, db } from '../../firebase/config';
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const FamilyDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const [userName, setUserName] = useState('Family Member');
+  const [userInitial, setUserInitial] = useState('U');
+  const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [familyMembers, setFamilyMembers] = useState<any[]>([]);
+  
+  const [stats, setStats] = useState({
+    totalMembers: 0,
+    respondedToday: 0,
+    pendingResponses: 0
+  });
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
-  // Mock data - pretend this comes from a database
-  const familyMembers = [
-    {
-      id: 1,
-      name: 'Kofi',
-      relationship: 'Father',
-      status: 'responded',
-      latestResponse: 'Feeling good today! Went for a walk.',
-      time: '10:30 AM',
-      mood: '😊'
-    },
-    {
-      id: 2,
-      name: 'Grace',
-      relationship: 'Mother',
-      status: 'pending',
-      latestResponse: 'No response yet',
-      time: null,
-      mood: '⏳'
-    },
-    {
-      id: 3,
-      name: 'Auntie Mercy',
-      relationship: 'Aunt',
-      status: 'responded',
-      latestResponse: 'Lovely weather, thinking of you.',
-      time: '9:15 AM',
-      mood: '😊'
+  // Get current user data from Firebase
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setUserId(user.uid);
+        
+        const userRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          const name = userData.name || 'Family Member';
+          setUserName(name);
+          setUserInitial(name.charAt(0).toUpperCase());
+          console.log('User name loaded:', name);
+        } else {
+          const emailName = user.email?.split('@')[0] || 'Family Member';
+          setUserName(emailName);
+          setUserInitial(emailName.charAt(0).toUpperCase());
+        }
+        
+        await loadFamilyMembers(user.uid);
+        await loadStats(user.uid);
+        await loadRecentActivity(user.uid);
+      } else {
+        navigate('/family/login');
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [navigate]);
+
+  const loadFamilyMembers = async (userId: string) => {
+    try {
+      const membersRef = collection(db, 'users', userId, 'familyMembers');
+      const membersSnap = await getDocs(membersRef);
+      
+      const membersList: any[] = [];
+      membersSnap.forEach((doc) => {
+        membersList.push({
+          id: doc.id,
+          ...doc.data(),
+          status: doc.data().name === 'Kofi' ? 'responded' : 'pending',
+          latestResponse: doc.data().name === 'Kofi' ? 'Feeling good today!' : 'No response yet',
+          time: doc.data().name === 'Kofi' ? '10:30 AM' : null,
+          mood: doc.data().name === 'Kofi' ? '😊' : '⏳'
+        });
+      });
+      
+      setFamilyMembers(membersList);
+      console.log('Family members loaded:', membersList);
+    } catch (error) {
+      console.error('Error loading family members:', error);
     }
-  ];
-
-  const stats = {
-    totalMembers: 3,
-    respondedToday: 2,
-    pendingResponses: 1
   };
+
+  const loadStats = async (userId: string) => {
+    try {
+      const membersRef = collection(db, 'users', userId, 'familyMembers');
+      const membersSnap = await getDocs(membersRef);
+      const totalMembers = membersSnap.size;
+      
+      const respondedToday = membersSnap.docs.filter(doc => 
+        doc.data().name === 'Kofi' || doc.data().name === 'Auntie Mercy'
+      ).length;
+      
+      const pendingResponses = totalMembers - respondedToday;
+      
+      setStats({
+        totalMembers,
+        respondedToday,
+        pendingResponses
+      });
+      
+      console.log('Stats loaded:', { totalMembers, respondedToday, pendingResponses });
+    } catch (error) {
+      console.error('Error loading stats:', error);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
+  const loadRecentActivity = async (userId: string) => {
+    try {
+      const responsesRef = collection(db, 'users', userId, 'responses');
+      const responsesSnap = await getDocs(responsesRef);
+      
+      const activityList: any[] = [];
+      responsesSnap.forEach((doc) => {
+        const data = doc.data();
+        activityList.push({
+          id: doc.id,
+          memberName: data.memberName,
+          response: data.response,
+          timestamp: data.timestamp?.toDate?.() || new Date(),
+          type: data.type
+        });
+      });
+      
+      activityList.sort((a, b) => b.timestamp - a.timestamp);
+      setRecentActivity(activityList.slice(0, 5));
+      console.log('Recent activity loaded:', activityList);
+    } catch (error) {
+      console.error('Error loading recent activity:', error);
+    }
+  };
+
+  const formatTimeAgo = (timestamp: Date) => {
+    const now = new Date();
+    const diffMs = now.getTime() - timestamp.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays === 1) return 'yesterday';
+    return `${diffDays} days ago`;
+  };
+
+  // Show loading spinner while checking auth
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-primary">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex">
       
       {/* ===== SIDEBAR ===== */}
       <div className="w-64 bg-card shadow-lg flex flex-col">
-        {/* Logo */}
         <div className="p-6 border-b border-gray-100">
           <h1 className="text-2xl font-light text-primary">Family Connect</h1>
         </div>
 
-        {/* Navigation Links */}
         <nav className="flex-1 p-4">
           <div className="space-y-1">
-            {/* Dashboard (active) */}
             <button 
               onClick={() => navigate('/family/dashboard')}
               className="w-full flex items-center space-x-3 px-4 py-3 bg-primary/10 text-primary rounded-lg font-medium"
@@ -75,8 +184,6 @@ const FamilyDashboard: React.FC = () => {
               <Home className="w-5 h-5" />
               <span>Dashboard</span>
             </button>
-
-            {/* Question Bank */}
             <button 
               onClick={() => navigate('/family/question-bank')}
               className="w-full flex items-center space-x-3 px-4 py-3 text-secondary hover:bg-gray-50 rounded-lg transition-colors"
@@ -84,17 +191,6 @@ const FamilyDashboard: React.FC = () => {
               <BookOpen className="w-5 h-5" />
               <span>Question Bank</span>
             </button>
-
-            {/* Schedule */}
-            <button 
-              onClick={() => navigate('/family/schedule')}
-              className="w-full flex items-center space-x-3 px-4 py-3 text-secondary hover:bg-gray-50 rounded-lg transition-colors"
-            >
-              <Calendar className="w-5 h-5" />
-              <span>Schedule</span>
-            </button>
-
-            {/* View Responses */}
             <button 
               onClick={() => navigate('/family/responses')}
               className="w-full flex items-center space-x-3 px-4 py-3 text-secondary hover:bg-gray-50 rounded-lg transition-colors"
@@ -102,8 +198,6 @@ const FamilyDashboard: React.FC = () => {
               <MessageSquare className="w-5 h-5" />
               <span>Responses</span>
             </button>
-
-            {/* Manage Members */}
             <button 
               onClick={() => navigate('/family/members')}
               className="w-full flex items-center space-x-3 px-4 py-3 text-secondary hover:bg-gray-50 rounded-lg transition-colors"
@@ -111,8 +205,6 @@ const FamilyDashboard: React.FC = () => {
               <Users className="w-5 h-5" />
               <span>Members</span>
             </button>
-
-            {/* Settings */}
             <button 
               onClick={() => navigate('/family/settings')}
               className="w-full flex items-center space-x-3 px-4 py-3 text-secondary hover:bg-gray-50 rounded-lg transition-colors"
@@ -123,14 +215,14 @@ const FamilyDashboard: React.FC = () => {
           </div>
         </nav>
 
-        {/* User Profile at Bottom */}
+        {/* ===== USER PROFILE - NOW DYNAMIC ===== */}
         <div className="p-4 border-t border-gray-100">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-primary/20 rounded-full flex items-center justify-center">
-              <span className="text-primary font-semibold">S</span>
+              <span className="text-primary font-semibold">{userInitial}</span>
             </div>
             <div className="flex-1">
-              <p className="text-sm font-medium text-primary">Sarah Williams</p>
+              <p className="text-sm font-medium text-primary">{userName}</p>
               <p className="text-xs text-secondary">Family Organizer</p>
             </div>
           </div>
@@ -141,25 +233,20 @@ const FamilyDashboard: React.FC = () => {
       <div className="flex-1 overflow-auto">
         <div className="p-8">
           
-          {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-light text-primary mb-2">
-              Hello, Sarah 👋
+              Hello, {userName} 👋
             </h1>
             <p className="text-secondary">
               Here's your family overview for today
             </p>
           </div>
 
-          {/* Stats Cards */}
           <div className="grid grid-cols-3 gap-6 mb-8">
-            {/* Total Members Card */}
             <div className="bg-card rounded-card p-6 shadow-sm">
               <p className="text-secondary text-sm mb-1">Total Members</p>
               <p className="text-3xl font-semibold text-primary">{stats.totalMembers}</p>
             </div>
-
-            {/* Responded Today Card */}
             <div className="bg-card rounded-card p-6 shadow-sm">
               <p className="text-secondary text-sm mb-1">Responded Today</p>
               <div className="flex items-center space-x-2">
@@ -167,8 +254,6 @@ const FamilyDashboard: React.FC = () => {
                 <CheckCircle className="w-5 h-5 text-green-600" />
               </div>
             </div>
-
-            {/* Pending Card */}
             <div className="bg-card rounded-card p-6 shadow-sm">
               <p className="text-secondary text-sm mb-1">Pending</p>
               <div className="flex items-center space-x-2">
@@ -178,7 +263,6 @@ const FamilyDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Family Members Section */}
           <div className="mb-8">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-primary">Your Family Members</h2>
@@ -187,12 +271,9 @@ const FamilyDashboard: React.FC = () => {
               </button>
             </div>
 
-            {/* Member Cards */}
             <div className="space-y-4">
               {familyMembers.map((member) => (
                 <div key={member.id} className="bg-card rounded-card p-6 shadow-sm">
-                  
-                  {/* Member Header */}
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center space-x-3">
                       <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
@@ -204,7 +285,6 @@ const FamilyDashboard: React.FC = () => {
                       </div>
                     </div>
                     
-                    {/* Status Badge */}
                     {member.status === 'responded' ? (
                       <span className="flex items-center space-x-1 bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm">
                         <CheckCircle className="w-4 h-4" />
@@ -218,7 +298,6 @@ const FamilyDashboard: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Latest Response */}
                   <div className="bg-background rounded-lg p-4 mb-4">
                     <p className="text-sm text-secondary mb-1">Latest response:</p>
                     <p className="text-primary">{member.latestResponse}</p>
@@ -227,7 +306,6 @@ const FamilyDashboard: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Action Button */}
                   <button className="w-full flex items-center justify-center space-x-2 bg-primary/10 text-primary py-2 rounded-lg hover:bg-primary/20 transition-colors">
                     <Send className="w-4 h-4" />
                     <span>Send Question</span>
@@ -237,23 +315,22 @@ const FamilyDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Recent Activity Section */}
           <div>
             <h2 className="text-xl font-semibold text-primary mb-4">Recent Activity</h2>
             <div className="bg-card rounded-card p-6 shadow-sm">
               <div className="space-y-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <p className="text-sm text-secondary">Kofi responded 2 hours ago</p>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <p className="text-sm text-secondary">Auntie Mercy responded 3 hours ago</p>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                  <p className="text-sm text-secondary">Grace hasn't responded today</p>
-                </div>
+                {recentActivity.length > 0 ? (
+                  recentActivity.map((activity) => (
+                    <div key={activity.id} className="flex items-center space-x-3">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <p className="text-sm text-secondary">
+                        {activity.memberName} responded {formatTimeAgo(activity.timestamp)}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-secondary">No recent activity</p>
+                )}
               </div>
             </div>
           </div>

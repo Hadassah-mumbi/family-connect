@@ -6,38 +6,90 @@ import {
   HelpCircle,
   Check
 } from 'lucide-react';
+import { db } from '../../firebase/config';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 const ElderlyLogin: React.FC = () => {
   const navigate = useNavigate();
   const [pin, setPin] = useState<string[]>([]);
   const [showVoiceHelp, setShowVoiceHelp] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   // Handle number pad click
   const handleNumberClick = (num: number) => {
     if (pin.length < 4) {
       setPin([...pin, num.toString()]);
+      setError(''); // Clear error when user types
     }
   };
 
   // Handle delete
   const handleDelete = () => {
     setPin(pin.slice(0, -1));
+    setError('');
   };
 
   // Handle clear all
   const handleClear = () => {
     setPin([]);
+    setError('');
   };
 
   // Handle submit
-  const handleSubmit = () => {
-    if (pin.length === 4) {
-      const enteredPin = pin.join('');
-      // In real app, verify PIN with backend
-      console.log('PIN entered:', enteredPin);
+  const handleSubmit = async () => {
+    if (pin.length !== 4) return;
+    
+    const enteredPin = pin.join('');
+    console.log('Searching for PIN:', enteredPin);
+    setLoading(true);
+    setError('');
+    
+    try {
+      const elderlyRef = collection(db, 'elderly_users');
       
-      // For demo, any 4-digit PIN works
-      navigate('/elderly/daily-question');
+      // 🔴 TEMPORARY TEST: Get ALL documents
+      const allDocs = await getDocs(elderlyRef);
+      console.log('ALL elderly users in collection:', allDocs.size);
+      
+      allDocs.forEach(doc => {
+        console.log('Document ID:', doc.id);
+        console.log('Document data:', doc.data());
+        console.log('PIN in database:', doc.data().pin);
+        console.log('Type of PIN:', typeof doc.data().pin);
+      });
+      
+      // Now try the specific query
+      const q = query(elderlyRef, where('pin', '==', enteredPin));
+      const querySnap = await getDocs(q);
+      console.log('Query results:', querySnap.size, 'documents found');
+      
+      if (!querySnap.empty) {
+        const userDoc = querySnap.docs[0];
+        const userData = userDoc.data();
+        
+        console.log('Login successful:', userData);
+        
+        localStorage.setItem('elderlyUser', JSON.stringify({
+          id: userDoc.id,
+          memberId: userData.memberId,
+          familyId: userData.familyId,   // ← MAKE SURE THIS IS HERE!
+          name: userData.name,
+          pin: userData.pin,
+          relationship: userData.relationship
+        }));
+        
+        navigate('/elderly/daily-question');
+      } else {
+        console.log('No user found with PIN:', enteredPin);
+        setError('Invalid PIN. Please try again.');
+        setPin([]);
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -47,8 +99,9 @@ const ElderlyLogin: React.FC = () => {
     // In real app, this would trigger speech recognition
     setTimeout(() => {
       setShowVoiceHelp(false);
-      // Simulate successful voice login
-      navigate('/elderly/daily-question');
+      // For demo, use a test PIN
+      setPin(['1', '2', '3', '4']);
+      setTimeout(() => handleSubmit(), 500);
     }, 2000);
   };
 
@@ -91,6 +144,13 @@ const ElderlyLogin: React.FC = () => {
           ))}
         </div>
 
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-100 text-red-700 p-3 rounded-lg mb-4 text-center">
+            {error}
+          </div>
+        )}
+
         {/* Voice Login Indicator */}
         {showVoiceHelp && (
           <div className="bg-primary/10 rounded-lg p-4 mb-6 text-center animate-pulse">
@@ -105,7 +165,8 @@ const ElderlyLogin: React.FC = () => {
             <button
               key={num}
               onClick={() => handleNumberClick(num)}
-              className="h-20 bg-primary text-white text-3xl font-bold rounded-2xl shadow-lg hover:bg-primary/90 transition-colors focus:outline-none focus:ring-4 focus:ring-primary/50"
+              disabled={loading}
+              className="h-20 bg-primary text-white text-3xl font-bold rounded-2xl shadow-lg hover:bg-primary/90 transition-colors focus:outline-none focus:ring-4 focus:ring-primary/50 disabled:opacity-50"
               aria-label={`Number ${num}`}
             >
               {num}
@@ -113,19 +174,22 @@ const ElderlyLogin: React.FC = () => {
           ))}
           <button
             onClick={handleClear}
-            className="h-20 bg-gray-200 text-secondary text-xl font-semibold rounded-2xl shadow-lg hover:bg-gray-300 transition-colors focus:outline-none focus:ring-4 focus:ring-gray-300"
+            disabled={loading}
+            className="h-20 bg-gray-200 text-secondary text-xl font-semibold rounded-2xl shadow-lg hover:bg-gray-300 transition-colors focus:outline-none focus:ring-4 focus:ring-gray-300 disabled:opacity-50"
           >
             Clear
           </button>
           <button
             onClick={() => handleNumberClick(0)}
-            className="h-20 bg-primary text-white text-3xl font-bold rounded-2xl shadow-lg hover:bg-primary/90 transition-colors focus:outline-none focus:ring-4 focus:ring-primary/50"
+            disabled={loading}
+            className="h-20 bg-primary text-white text-3xl font-bold rounded-2xl shadow-lg hover:bg-primary/90 transition-colors focus:outline-none focus:ring-4 focus:ring-primary/50 disabled:opacity-50"
           >
             0
           </button>
           <button
             onClick={handleDelete}
-            className="h-20 bg-gray-200 text-secondary text-xl font-semibold rounded-2xl shadow-lg hover:bg-gray-300 transition-colors focus:outline-none focus:ring-4 focus:ring-gray-300"
+            disabled={loading}
+            className="h-20 bg-gray-200 text-secondary text-xl font-semibold rounded-2xl shadow-lg hover:bg-gray-300 transition-colors focus:outline-none focus:ring-4 focus:ring-gray-300 disabled:opacity-50"
           >
             ⌫
           </button>
@@ -134,21 +198,31 @@ const ElderlyLogin: React.FC = () => {
         {/* Login Button */}
         <button
           onClick={handleSubmit}
-          disabled={pin.length !== 4}
+          disabled={pin.length !== 4 || loading}
           className={`w-full py-4 text-xl font-semibold rounded-2xl mb-4 transition-colors flex items-center justify-center space-x-2
-            ${pin.length === 4 
+            ${pin.length === 4 && !loading
               ? 'bg-green-600 text-white hover:bg-green-700' 
               : 'bg-gray-200 text-gray-500 cursor-not-allowed'
             }`}
         >
-          <Check className="w-6 h-6" />
-          <span>Login</span>
+          {loading ? (
+            <>
+              <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              <span>Logging in...</span>
+            </>
+          ) : (
+            <>
+              <Check className="w-6 h-6" />
+              <span>Login</span>
+            </>
+          )}
         </button>
 
         {/* Voice Login Button */}
         <button
           onClick={handleVoiceLogin}
-          className="w-full py-4 bg-primary text-white text-xl font-semibold rounded-2xl hover:bg-primary/90 transition-colors flex items-center justify-center space-x-2 mb-4"
+          disabled={loading}
+          className="w-full py-4 bg-primary text-white text-xl font-semibold rounded-2xl hover:bg-primary/90 transition-colors flex items-center justify-center space-x-2 mb-4 disabled:opacity-50"
         >
           <Mic className="w-6 h-6" />
           <span>Use Voice Login</span>
@@ -157,7 +231,8 @@ const ElderlyLogin: React.FC = () => {
         {/* Forgot PIN */}
         <button
           onClick={() => alert('Your family member can reset your PIN')}
-          className="w-full text-center text-primary hover:underline py-2 flex items-center justify-center space-x-1"
+          disabled={loading}
+          className="w-full text-center text-primary hover:underline py-2 flex items-center justify-center space-x-1 disabled:opacity-50"
         >
           <HelpCircle className="w-4 h-4" />
           <span>Forgot PIN? Ask family to reset</span>
