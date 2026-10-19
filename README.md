@@ -1,46 +1,88 @@
-# Getting Started with Create React App
+# Family Connect
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Family Connect is a web app that helps families stay connected with older relatives through daily questions and shared responses. Family members can manage questions and members, while older users can answer questions using text or speech recognition.
 
-## Available Scripts
+## Features
 
-In the project directory, you can run:
+### Family members
 
-### `npm start`
+- Create an account or sign in.
+- View the family dashboard and recent activity.
+- Add, find, and manage family members.
+- Create and manage questions in the question bank.
+- Schedule questions and review submitted responses.
+- Access profile and account settings.
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+### Older users
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+- Sign in using the older-user login screen.
+- Answer the daily question by typing or using speech recognition when supported by the browser.
+- Save a question to answer later, and browse saved questions and response history.
+- Access user settings.
 
-### `npm test`
+## Tech stack
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+- React and TypeScript, bootstrapped with Create React App
+- React Router for client-side navigation
+- Firebase Authentication, Cloud Firestore, and Cloud Storage
+- Tailwind CSS
 
-### `npm run build`
+## Getting started
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+### Requirements
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+- Node.js and npm
+- A Firebase project configured for this app
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+### Install and run
 
-### `npm run eject`
+```sh
+npm install
+npm start
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+The development server runs at [http://localhost:3000](http://localhost:3000).
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### Firebase configuration
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+The Firebase app is initialized in `src/firebase/config.ts`. Before connecting the app to your own Firebase project, update the `firebaseConfig` object in that file with your project's web app configuration. Enable the Firebase services the app uses (Authentication and Cloud Firestore; Cloud Storage is also initialized).
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+Do not commit private credentials or service-account keys. Firebase web configuration is intended for client apps, but access to your Firebase data must still be protected with appropriate Firebase Authentication and security rules.
 
-## Learn More
+## Available routes
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+| Route | Screen |
+| --- | --- |
+| `/` | Landing page |
+| `/family/signup` | Family account registration |
+| `/family/login` | Family sign in |
+| `/family/dashboard` | Family dashboard |
+| `/family/question-bank` | Question bank |
+| `/family/schedule` | Schedule a question |
+| `/family/responses` | View responses |
+| `/family/members` | Manage family members |
+| `/family/settings` | Family settings |
+| `/elderly/login` | Older-user sign in |
+| `/elderly/daily-question` | Daily question |
+| `/elderly/saved` | Saved questions |
+| `/elderly/history` | Response history |
+| `/elderly/settings` | Older-user settings |
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+## Scripts
+
+```sh
+npm start    # Start the development server
+npm test     # Run tests in watch mode
+npm run build # Create an optimized production build in build/
+```
+
+## Project structure
+
+```text
+src/
+  firebase/   Firebase initialization
+  pages/
+    family/   Family registration, dashboard, questions, members, and settings
+    elderly/  Older-user login, daily question, saved questions, history, and settings
+  App.tsx     Application routes
+```
